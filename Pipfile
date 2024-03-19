@@ -1,0 +1,16 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+bs4 = "*"
+boto3 = "*"
+
+[scripts]
+ambabot = "python -m ambabot"
+
+[dev-packages]
+
+[requires]
+python_version = "3.10"
