@@ -69,6 +69,12 @@ resource "aws_iam_role_policy_attachment" "lambda_logs" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# Keep logs for 14 days
+resource "aws_cloudwatch_log_group" "lambda_log_group" {
+  name              = "/aws/lambda/ambabot"
+  retention_in_days = 14
+}
+
 resource "aws_lambda_function" "ambabot" {
   function_name = "ambabot"
 

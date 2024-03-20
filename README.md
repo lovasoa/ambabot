@@ -74,3 +74,13 @@ LOG_LEVEL=DEBUG
 EMAIL_TO=contact@ophir.dev
 EMAIL_FROM=contact@ophir.dev
 ```
+
+## Logs
+
+The logs are available in CloudWatch, in the log group `/aws/lambda/ambabot`.
+To view the logs, run the following command:
+
+```bash
+aws logs get-log-events --log-group-name /aws/lambda/ambabot --log-stream-name $(aws logs describe-log-streams --log-group-name /aws/lambda/ambabot --limit 1 --query 'logStreams[0].logStreamName' --output text)
+```
+    
