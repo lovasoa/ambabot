@@ -1,3 +1,6 @@
+import easyocr
+import io
+from PIL import Image
 import ssl
 import urllib.request
 import urllib.parse
@@ -13,7 +16,7 @@ from typing import Optional, Dict
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
 AMBASSY_REQUEST_NUMBER = os.environ["AMBASSY_REQUEST_NUMBER"]
 AMBASSY_PROTECTION_CODE = os.environ["AMBASSY_PROTECTION_CODE"]
-RETRY_COUNT = int(os.environ.get("RETRY_COUNT", "3"))
+RETRY_COUNT = int(os.environ.get("RETRY_COUNT", "10"))
 EMAIL_FROM = os.getenv("EMAIL_FROM", "contact@ophir.dev")
 EMAIL_TO = os.getenv("EMAIL_TO", "contact@ophir.dev")
 
@@ -31,6 +34,7 @@ opener = urllib.request.build_opener(
     cookies,
 )
 opener.addheaders = [('User-agent', USER_AGENT)]
+
 
 def http_req(url: str, form_data: Optional[Dict[str, str]] = None) -> bytes:
     """Make a request, accept any SSL certificate, and return the response. Stores cookies in a file."""
@@ -83,23 +87,45 @@ class CaptchaSolvingError(ValueError):
     pass
 
 
-def solve_captcha(image: bytes) -> str:
-    """Solve the captcha using the given image, using AWS textract """
-    client = boto3.client('textract')
-    response = client.detect_document_text(
-        Document={
-            'Bytes': image
-        }
-    )
-    # The text is in the "Text" field of the "WORD" block type
-    for block in response["Blocks"]:
-        if block["BlockType"] == "WORD":
-            txt: str = block["Text"]
-            # We are looking for a 6-character number-only string
-            if txt.isdigit() and len(txt) == 6:
-                return txt
-    raise CaptchaSolvingError("No text found in the image: " + str(response))
+def extract_capcha_image(source_image: bytes) -> bytes:
+    # The input image is 600x200, but the text is located in the central 200x200 area
+    pil_img = Image.open(io.BytesIO(source_image))
+    pil_img = pil_img.crop((200, 0, 400, 200))
+    # Convert the image to bytes
+    img_byte_array = io.BytesIO()
+    pil_img.save(img_byte_array, format="JPEG")
+    image = img_byte_array.getvalue()
+    return image
 
+
+
+easyocr_reader = easyocr.Reader(["en"])
+
+
+def solve_captcha(image: bytes) -> str:
+    """Solve the captcha using the given image, using easyocr"""
+    image = extract_capcha_image(image)
+    result = easyocr_reader.readtext(
+        image, allowlist="0123456789", min_size=10, detail=0, rotation_info=[90, 270],
+        decoder='beamsearch', beamWidth=15,
+        contrast_ths=0.2,
+        text_threshold=0.01)
+    logger.debug("Detected text: %s", result)
+    if len(result) == 0:
+        raise CaptchaSolvingError("No text found in the image")
+    # We are looking for a 6-character number-only string
+    for r in result:
+        if is_captcha_format_ok(r):
+            return r
+    txt = "".join(t for r in result for t in r if t.isdigit())
+    if is_captcha_format_ok(txt):
+        return txt
+    if len(txt) > 6:
+        return txt[:6]
+    raise CaptchaSolvingError("No 6-digit number found in the image")
+
+def is_captcha_format_ok(captcha: str) -> bool:
+    return captcha.isdigit() and len(captcha) == 6
 
 def fill_form_data(data: Dict[str, str], captcha_image: bytes) -> Dict[str, str]:
     """Fill the form data with the given captcha image."""
@@ -204,4 +230,6 @@ def main(*args, **kwargs):
 
 
 if __name__ == "__main__":
+    # use our logger
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
     main()

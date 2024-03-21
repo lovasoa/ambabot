@@ -6,6 +6,8 @@ name = "pypi"
 [packages]
 bs4 = "*"
 boto3 = "*"
+pillow = "*"
+easyocr = "*"
 
 [scripts]
 ambabot = "python -m ambabot"

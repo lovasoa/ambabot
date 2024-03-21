@@ -93,6 +93,7 @@ resource "aws_lambda_function" "ambabot" {
     variables = {
       AMBASSY_PROTECTION_CODE = var.AMBASSY_PROTECTION_CODE
       AMBASSY_REQUEST_NUMBER  = var.AMBASSY_REQUEST_NUMBER
+      EASYOCR_MODULE_PATH     = "easyocr_model"
     }
   }
 }
@@ -107,4 +108,13 @@ resource "aws_cloudwatch_event_target" "trigger_ambabot_rule" {
   rule      = aws_cloudwatch_event_rule.trigger_ambabot_rule.name
   target_id = "lambda_function"
   arn       = aws_lambda_function.ambabot.arn
+}
+
+# In order for our cron to work, we need to let our Lambda know that EventBridge is allowed to Invoke it.
+resource "aws_lambda_permission" "allow_cloudwatch_to_call_lambda" {
+  statement_id  = "AllowExecutionFromCloudWatch"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ambabot.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.trigger_ambabot_rule.arn
 }
